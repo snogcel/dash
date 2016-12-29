@@ -12,7 +12,7 @@
 void show_help()
 {
     std::cout <<
-        "This program outputs Bitcoin addresses and private keys from a wallet.dat file" << std::endl
+        "This program outputs Dash addresses and private keys from a wallet.dat file" << std::endl
         << std::endl
         << "Usage and options: "
         << std::endl
