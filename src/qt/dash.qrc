@@ -150,7 +150,6 @@
         <file alias="remove">res/icons/light/remove.png</file>
         <file alias="tx_mined">res/icons/light/tx_mined.png</file>
         <file alias="tx_input">res/icons/light/tx_input.png</file>
-        <file alias="tx_line">res/icons/light/tx_line.png</file>
         <file alias="tx_output">res/icons/light/tx_output.png</file>
         <file alias="tx_inout">res/icons/light/tx_inout.png</file>
         <file alias="lock_closed">res/icons/light/lock_closed.png</file>

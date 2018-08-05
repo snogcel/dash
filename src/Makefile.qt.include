@@ -341,7 +341,6 @@ RES_ICONS = \
   qt/res/icons/light/transaction_conflicted.png \
   qt/res/icons/light/tx_inout.png \
   qt/res/icons/light/tx_input.png \
-  qt/res/icons/light/tx_line.png \
   qt/res/icons/light/tx_output.png \
   qt/res/icons/light/tx_mined.png \
   qt/res/icons/light/about.png \
