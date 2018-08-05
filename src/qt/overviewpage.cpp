@@ -47,7 +47,12 @@ public:
     {
         painter->save();
 
-        QIcon icon = qvariant_cast<QIcon>(index.data(TransactionTableModel::RawDecorationRole));
+        QString theme = GUIUtil::getThemeName();
+        // Use either vertical lines or tx role specific icons
+        QIcon icon(":/icons/" + theme + "/tx_line");
+        if (icon.pixmap(QSize(DECORATION_SIZE, DECORATION_SIZE)).isNull()) {
+            icon = qvariant_cast<QIcon>(index.data(TransactionTableModel::RawDecorationRole));
+        }
         QRect mainRect = option.rect;
         mainRect.moveLeft(ICON_OFFSET);
         QRect decorationRect(mainRect.topLeft(), QSize(DECORATION_SIZE, DECORATION_SIZE));

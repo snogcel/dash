@@ -150,6 +150,7 @@
         <file alias="remove">res/icons/light/remove.png</file>
         <file alias="tx_mined">res/icons/light/tx_mined.png</file>
         <file alias="tx_input">res/icons/light/tx_input.png</file>
+        <file alias="tx_line">res/icons/light/tx_line.png</file>
         <file alias="tx_output">res/icons/light/tx_output.png</file>
         <file alias="tx_inout">res/icons/light/tx_inout.png</file>
         <file alias="lock_closed">res/icons/light/lock_closed.png</file>
@@ -326,6 +327,7 @@
     <qresource prefix="/images/light">
         <file alias="about">res/images/light/about.png</file>
         <file alias="dash_logo_horizontal">res/images/light/dash_logo_horizontal.png</file>
+        <file alias="dash_logo_toolbar">res/images/light/dash_logo_toolbar.png</file>
         <file alias="unchecked">res/images/light/unchecked.png</file>
         <file alias="checked">res/images/light/checked.png</file>
         <file alias="drkblue_downArrow">res/images/light/drkblue_downArrow.png</file>
