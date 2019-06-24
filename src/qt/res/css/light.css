@@ -108,7 +108,6 @@ background-color:#f2f2f2;
 /*******************************************************/
 
 QPushButton { /* Global Button Style */
-/* background-color:qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: .01 #4ca5dc, stop: .1 #2c85cc, stop: .95 #2c85cc, stop: 1 #1D80B5); */
 background-color: #008DE4;
 border:0;
 border-radius:8px;
@@ -123,7 +122,6 @@ padding-bottom:5px;
 }
 
 QPushButton:hover {
-/* background-color:qlineargradient(x1: 0, y1: 0, x2: 0, y2: 1, stop: .01 #4ca5dc, stop: .1 #4ca5dc, stop: .95 #4ca5dc, stop: 1 #1D80B5); */
 background-color:  #012060;
 }
 
@@ -285,7 +283,6 @@ background-color:transparent;
 
 QHeaderView::section { /* Table Header Sections */
 qproperty-alignment:center;
-/* background-color:qlineargradient(x1: 0, y1: 0, x2: 0, y2: 0.25, stop: 0 #1070B0, stop: 1 #1c75bc); */
 background-color: #008de4;
 color:#fff;
 min-height:25px;
