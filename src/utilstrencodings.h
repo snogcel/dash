@@ -19,14 +19,12 @@
 #define UEND(a)             ((unsigned char*)&((&(a))[1]))
 #define ARRAYLEN(array)     (sizeof(array)/sizeof((array)[0]))
 
-/** This is needed because the foreach macro can't get over the comma in pair<t1, t2> */
-#define PAIRTYPE(t1, t2)    std::pair<t1, t2>
-
 /** Used by SanitizeString() */
 enum SafeChars
 {
     SAFE_CHARS_DEFAULT, //!< The full set of allowed chars
-    SAFE_CHARS_UA_COMMENT //!< BIP-0014 subset
+    SAFE_CHARS_UA_COMMENT, //!< BIP-0014 subset
+    SAFE_CHARS_FILENAME, //!< Chars allowed in filenames
 };
 
 /**
@@ -69,6 +67,20 @@ bool ParseInt32(const std::string& str, int32_t *out);
  *   false if not the entire string could be parsed or when overflow or underflow occurred.
  */
 bool ParseInt64(const std::string& str, int64_t *out);
+
+/**
+ * Convert decimal string to unsigned 32-bit integer with strict parse error feedback.
+ * @returns true if the entire string could be parsed as valid integer,
+ *   false if not the entire string could be parsed or when overflow or underflow occurred.
+ */
+bool ParseUInt32(const std::string& str, uint32_t *out);
+
+/**
+ * Convert decimal string to unsigned 64-bit integer with strict parse error feedback.
+ * @returns true if the entire string could be parsed as valid integer,
+ *   false if not the entire string could be parsed or when overflow or underflow occurred.
+ */
+bool ParseUInt64(const std::string& str, uint64_t *out);
 
 /**
  * Convert string to double with strict parse error feedback.

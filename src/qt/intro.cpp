@@ -1,16 +1,19 @@
 // Copyright (c) 2011-2015 The Bitcoin Core developers
-// Copyright (c) 2014-2016 The Dash Core developers
+// Copyright (c) 2014-2019 The Dash Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
+#if defined(HAVE_CONFIG_H)
+#include "config/dash-config.h"
+#endif
+
+#include "fs.h"
 #include "intro.h"
 #include "ui_intro.h"
 
 #include "guiutil.h"
 
 #include "util.h"
-
-#include <boost/filesystem.hpp>
 
 #include <QFileDialog>
 #include <QSettings>
@@ -20,7 +23,7 @@
 
 static const uint64_t GB_BYTES = 1000000000LL;
 /* Minimum free space (in GB) needed for data directory */
-static const uint64_t BLOCK_CHAIN_SIZE = 1;
+static const uint64_t BLOCK_CHAIN_SIZE = 10;
 /* Minimum free space (in GB) needed for data directory when pruned; Does not include prune target */
 static const uint64_t CHAIN_STATE_SIZE = 1;
 /* Total required space (in GB) depending on user choice (prune, not prune) */
@@ -60,14 +63,13 @@ private:
 
 #include "intro.moc"
 
-FreespaceChecker::FreespaceChecker(Intro *intro)
+FreespaceChecker::FreespaceChecker(Intro *_intro)
 {
-    this->intro = intro;
+    this->intro = _intro;
 }
 
 void FreespaceChecker::check()
 {
-    namespace fs = boost::filesystem;
     QString dataDirStr = intro->getPathToCheck();
     fs::path dataDir = GUIUtil::qstringToBoostPath(dataDirStr);
     uint64_t freeBytesAvailable = 0;
@@ -119,11 +121,36 @@ Intro::Intro(QWidget *parent) :
     signalled(false)
 {
     ui->setupUi(this);
-    uint64_t pruneTarget = std::max<int64_t>(0, GetArg("-prune", 0));
+    ui->welcomeLabel->setText(ui->welcomeLabel->text().arg(tr(PACKAGE_NAME)));
+    ui->storageLabel->setText(ui->storageLabel->text().arg(tr(PACKAGE_NAME)));
+
+    ui->lblExplanation1->setText(ui->lblExplanation1->text()
+        .arg(tr(PACKAGE_NAME))
+        .arg(BLOCK_CHAIN_SIZE)
+        .arg(2014)
+        .arg("Dash")
+    );
+    ui->lblExplanation2->setText(ui->lblExplanation2->text().arg(tr(PACKAGE_NAME)));
+
+    uint64_t pruneTarget = std::max<int64_t>(0, gArgs.GetArg("-prune", 0));
     requiredSpace = BLOCK_CHAIN_SIZE;
-    if (pruneTarget)
-        requiredSpace = CHAIN_STATE_SIZE + std::ceil(pruneTarget * 1024 * 1024.0 / GB_BYTES);
-    ui->sizeWarningLabel->setText(ui->sizeWarningLabel->text().arg(requiredSpace));
+    QString storageRequiresMsg = tr("At least %1 GB of data will be stored in this directory, and it will grow over time.");
+    if (pruneTarget) {
+        uint64_t prunedGBs = std::ceil(pruneTarget * 1024 * 1024.0 / GB_BYTES);
+        if (prunedGBs <= requiredSpace) {
+            requiredSpace = prunedGBs;
+            storageRequiresMsg = tr("Approximately %1 GB of data will be stored in this directory.");
+        }
+        ui->lblExplanation3->setVisible(true);
+    } else {
+        ui->lblExplanation3->setVisible(false);
+    }
+    requiredSpace += CHAIN_STATE_SIZE;
+    ui->sizeWarningLabel->setText(
+        tr("%1 will download and store a copy of the Dash block chain.").arg(tr(PACKAGE_NAME)) + " " +
+        storageRequiresMsg.arg(requiredSpace) + " " +
+        tr("The wallet will also be stored in this directory.")
+    );
     startThread();
 }
 
@@ -160,24 +187,25 @@ QString Intro::getDefaultDataDirectory()
     return GUIUtil::boostPathToQString(GetDefaultDataDir());
 }
 
-void Intro::pickDataDirectory()
+bool Intro::pickDataDirectory()
 {
-    namespace fs = boost::filesystem;
     QSettings settings;
     /* If data directory provided on command line, no need to look at settings
        or show a picking dialog */
-    if(!GetArg("-datadir", "").empty())
-        return;
+    if(!gArgs.GetArg("-datadir", "").empty())
+        return true;
     /* 1) Default data directory for operating system */
-    QString dataDir = getDefaultDataDirectory();
+    QString dataDirDefaultCurrent = getDefaultDataDirectory();
     /* 2) Allow QSettings to override default dir */
-    dataDir = settings.value("strDataDir", dataDir).toString();
+    QString dataDir = settings.value("strDataDir", dataDirDefaultCurrent).toString();
+    /* 3) Check to see if default datadir is the one we expect */
+    QString dataDirDefaultSettings = settings.value("strDataDirDefault").toString();
 
-    if(!fs::exists(GUIUtil::qstringToBoostPath(dataDir)) || GetBoolArg("-choosedatadir", DEFAULT_CHOOSE_DATADIR))
+    if(!fs::exists(GUIUtil::qstringToBoostPath(dataDir)) || gArgs.GetBoolArg("-choosedatadir", DEFAULT_CHOOSE_DATADIR) || dataDirDefaultCurrent != dataDirDefaultSettings)
     {
-        /* If current default data directory does not exist, let the user choose one */
+        /* Let the user choose one */
         Intro intro;
-        intro.setDataDirectory(dataDir);
+        intro.setDataDirectory(dataDirDefaultCurrent);
         intro.setWindowIcon(QIcon(":icons/bitcoin"));
 
         while(true)
@@ -185,27 +213,29 @@ void Intro::pickDataDirectory()
             if(!intro.exec())
             {
                 /* Cancel clicked */
-                exit(0);
+                return false;
             }
             dataDir = intro.getDataDirectory();
             try {
-                TryCreateDirectory(GUIUtil::qstringToBoostPath(dataDir));
+                TryCreateDirectories(GUIUtil::qstringToBoostPath(dataDir));
                 break;
             } catch (const fs::filesystem_error&) {
-                QMessageBox::critical(0, tr("Dash Core"),
+                QMessageBox::critical(0, tr(PACKAGE_NAME),
                     tr("Error: Specified data directory \"%1\" cannot be created.").arg(dataDir));
                 /* fall through, back to choosing screen */
             }
         }
 
         settings.setValue("strDataDir", dataDir);
+        settings.setValue("strDataDirDefault", dataDirDefaultCurrent);
     }
     /* Only override -datadir if different from the default, to make it possible to
      * override -datadir in the dash.conf file in the default data directory
      * (to be consistent with dashd behavior)
      */
-    if(dataDir != getDefaultDataDirectory())
-        SoftSetArg("-datadir", GUIUtil::qstringToBoostPath(dataDir).string()); // use OS locale for path setting
+    if(dataDir != dataDirDefaultCurrent)
+        gArgs.SoftSetArg("-datadir", GUIUtil::qstringToBoostPath(dataDir).string()); // use OS locale for path setting
+    return true;
 }
 
 void Intro::setStatus(int status, const QString &message, quint64 bytesAvailable)

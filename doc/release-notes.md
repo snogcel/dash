@@ -1,198 +1,99 @@
-Dash Core version 0.12.1 is now available from:
+Dash Core version 0.14.0.2
+==========================
 
-  <https://www.dash.org/downloads/>
+Release is now available from:
 
-This is a new minor version release, including the BIP9, BIP68 and BIP112
-softfork, various bugfixes and updated translations.
+  <https://www.dash.org/downloads/#wallets>
+
+This is a new minor version release, bringing various bugfixes.
+
+Please report bugs using the issue tracker at github:
+
+  <https://github.com/dashpay/dash/issues>
 
 
+Upgrading and downgrading
+=========================
 
-Older releases
+How to Upgrade
 --------------
 
-Dash was previously known as Darkcoin.
+If you are running an older version, shut it down. Wait until it has completely
+shut down (which might take a few minutes for older versions), then run the
+installer (on Windows) or just copy over /Applications/Dash-Qt (on Mac) or
+dashd/dash-qt (on Linux). If you upgrade after DIP0003 activation and you were
+using version < 0.13 you will have to reindex (start with -reindex-chainstate
+or -reindex) to make sure your wallet has all the new data synced. Upgrading from
+version 0.13 should not require any additional actions.
 
-Darkcoin tree 0.8.x was a fork of Litecoin tree 0.8, original name was XCoin
-which was first released on Jan/18/2014.
+Downgrade warning
+-----------------
 
-### Downgrade to a version < 0.12.0
+### Downgrade to a version < 0.14.0.0
 
-Because release 0.12.0 and later will obfuscate the chainstate on every
-fresh sync or reindex, the chainstate is not backwards-compatible with
-pre-0.12 versions of Bitcoin Core or other software.
+Downgrading to a version smaller than 0.14 is not supported anymore as DIP8 has
+activated on mainnet and testnet.
 
-If you want to downgrade after you have done a reindex with 0.12.0 or later,
-you will need to reindex when you first start Bitcoin Core version 0.11 or
-earlier.
+### Downgrade to versions 0.14.0.0 - 0.14.0.1
+
+Downgrading to older 0.14 releases is fully supported but is not
+recommended unless you have some serious issues with version 0.14.0.2.
 
 Notable changes
 ===============
 
-First version bits BIP9 softfork deployment
--------------------------------------------
+Performance improvements
+------------------------
+Slow startup times were observed in older versions. This was due to sub-optimal handling of old
+deterministic masternode lists which caused the loading of too many lists into memory. This should be
+fixed now.
 
-This release includes a soft fork deployment to enforce [BIP68][],
-[BIP112][] and [BIP113][] using the [BIP9][] deployment mechanism.
+Fixed excessive memory use
+--------------------------
+Multiple issues were found which caused excessive use of memory in some situations, especially when
+a full reindex was performed, causing the node to crash even when enough RAM was available. This should
+be fixed now.
 
-The deployment sets the block version number to 0x20000001 between
-midnight 1st May 2016 and midnight 1st May 2017 to signal readiness for 
-deployment. The version number consists of 0x20000000 to indicate version
-bits together with setting bit 0 to indicate support for this combined
-deployment, shown as "csv" in the `getblockchaininfo` RPC call.
+Fixed out-of-sync masternode list UI
+------------------------------------
+The masternode tab, which shows the masternode list, was not always up-to-date as it missed some internal
+updates. This should be fixed now.
 
-For more information about the soft forking change, please see
-<https://github.com/bitcoin/bitcoin/pull/7648>
+0.14.0.2 Change log
+===================
 
-This specific backport pull-request can be viewed at
-<https://github.com/bitcoin/bitcoin/pull/7543>
+See detailed [set of changes](https://github.com/dashpay/dash/compare/v0.14.0.1...dashpay:v0.14.0.2).
 
-[BIP9]: https://github.com/bitcoin/bips/blob/master/bip-0009.mediawiki
-[BIP68]: https://github.com/bitcoin/bips/blob/master/bip-0068.mediawiki
-[BIP112]: https://github.com/bitcoin/bips/blob/master/bip-0112.mediawiki
-[BIP113]: https://github.com/bitcoin/bips/blob/master/bip-0113.mediawiki
-
-BIP68 soft fork to enforce sequence locks for relative locktime
----------------------------------------------------------------
-
-[BIP68][] introduces relative lock-time consensus-enforced semantics of
-the sequence number field to enable a signed transaction input to remain
-invalid for a defined period of time after confirmation of its corresponding
-outpoint.
-
-For more information about the implementation, see
-<https://github.com/bitcoin/bitcoin/pull/7184>
-
-BIP112 soft fork to enforce OP_CHECKSEQUENCEVERIFY
---------------------------------------------------
-
-[BIP112][] redefines the existing OP_NOP3 as OP_CHECKSEQUENCEVERIFY (CSV)
-for a new opcode in the Bitcoin scripting system that in combination with
-[BIP68][] allows execution pathways of a script to be restricted based
-on the age of the output being spent.
-
-For more information about the implementation, see
-<https://github.com/bitcoin/bitcoin/pull/7524>
-
-BIP113 locktime enforcement soft fork
--------------------------------------
-
-Bitcoin Core 0.11.2 previously introduced mempool-only locktime
-enforcement using GetMedianTimePast(). This release seeks to
-consensus enforce the rule.
-
-Bitcoin transactions currently may specify a locktime indicating when
-they may be added to a valid block.  Current consensus rules require
-that blocks have a block header time greater than the locktime specified
-in any transaction in that block.
-
-Miners get to choose what time they use for their header time, with the
-consensus rule being that no node will accept a block whose time is more
-than two hours in the future.  This creates a incentive for miners to
-set their header times to future values in order to include locktimed
-transactions which weren't supposed to be included for up to two more
-hours.
-
-The consensus rules also specify that valid blocks may have a header
-time greater than that of the median of the 11 previous blocks.  This
-GetMedianTimePast() time has a key feature we generally associate with
-time: it can't go backwards.
-
-[BIP113][] specifies a soft fork enforced in this release that
-weakens this perverse incentive for individual miners to use a future
-time by requiring that valid blocks have a computed GetMedianTimePast()
-greater than the locktime specified in any transaction in that block.
-
-Mempool inclusion rules currently require transactions to be valid for
-immediate inclusion in a block in order to be accepted into the mempool.
-This release begins applying the BIP113 rule to received transactions,
-so transaction whose time is greater than the GetMedianTimePast() will
-no longer be accepted into the mempool.
-
-**Implication for miners:** you will begin rejecting transactions that
-would not be valid under BIP113, which will prevent you from producing
-invalid blocks when BIP113 is enforced on the network. Any
-transactions which are valid under the current rules but not yet valid
-under the BIP113 rules will either be mined by other miners or delayed
-until they are valid under BIP113. Note, however, that time-based
-locktime transactions are more or less unseen on the network currently.
-
-**Implication for users:** GetMedianTimePast() always trails behind the
-current time, so a transaction locktime set to the present time will be
-rejected by nodes running this release until the median time moves
-forward. To compensate, subtract one hour (3,600 seconds) from your
-locktimes to allow those transactions to be included in mempools at
-approximately the expected time.
-
-For more information about the implementation, see
-<https://github.com/bitcoin/bitcoin/pull/6566>
-
-Miscellaneous
--------------
-
-The p2p alert system is off by default. To turn on, use `-alert` with
-startup configuration.
-
-0.12.1 Change log
-=================
-
-Detailed release notes follow. This overview includes changes that affect
-behavior, not code moves, refactors and string updates. For convenience in locating
-the code changes and accompanying discussion, both the pull request and
-git merge commit are mentioned.
-
-### RPC and other APIs
-- #7739 `7ffc2bd` Add abandoned status to listtransactions (jonasschnelli)
-
-### Configuration and command-line options
-
-### Block and transaction handling
-- #7543 `834aaef` Backport BIP9, BIP68 and BIP112 with softfork (btcdrak)
-
-### P2P protocol and network code
-- #7804 `90f1d24` Track block download times per individual block (sipa)
-- #7832 `4c3a00d` Reduce block timeout to 10 minutes (laanwj)
-
-### Validation
-- #7821 `4226aac` init: allow shutdown during 'Activating best chain...' (laanwj)
-- #7835 `46898e7` Version 2 transactions remain non-standard until CSV activates (sdaftuar)
-
-### Build system
-- #7487 `00d57b4` Workaround Travis-side CI issues (luke-jr)
-- #7606 `a10da9a` No need to set -L and --location for curl (MarcoFalke)
-- #7614 `ca8f160` Add curl to packages (now needed for depends) (luke-jr)
-- #7776 `a784675` Remove unnecessary executables from gitian release (laanwj)
-
-### Wallet
-- #7715 `19866c1` Fix calculation of balances and available coins. (morcos)
-
-### GUI
-
-### Tests and QA
-
-### Miscellaneous
-- #7617 `f04f4fd` Fix markdown syntax and line terminate LogPrint (MarcoFalke)
-- #7747 `4d035bc` added depends cross compile info (accraze)
-- #7741 `a0cea89` Mark p2p alert system as deprecated (btcdrak)
-- #7780 `c5f94f6` Disable bad-chain alert (btcdrak)
+- [`d2ff63e8d`](https://github.com/dashpay/dash/commit/d2ff63e8d) Use std::unique_ptr for mnList in CSimplifiedMNList (#3014)
+- [`321bbf5af`](https://github.com/dashpay/dash/commit/321bbf5af) Fix excessive memory use when flushing chainstate and EvoDB (#3008)
+- [`0410259dd`](https://github.com/dashpay/dash/commit/0410259dd) Fix 2 common Travis failures which happen when Travis has network issues (#3003)
+- [`8d763c144`](https://github.com/dashpay/dash/commit/8d763c144) Only load signingActiveQuorumCount + 1 quorums into cache (#3002)
+- [`2dc1b06ec`](https://github.com/dashpay/dash/commit/2dc1b06ec) Remove skipped denom from the list on tx commit (#2997)
+- [`dff2c851d`](https://github.com/dashpay/dash/commit/dff2c851d) Update manpages for 0.14.0.2 (#2999)
+- [`46c4f5844`](https://github.com/dashpay/dash/commit/46c4f5844) Use Travis stages instead of custom timeouts (#2948)
+- [`49c37b82a`](https://github.com/dashpay/dash/commit/49c37b82a) Back off for 1m when connecting to quorum masternodes (#2975)
+- [`c1f756fd9`](https://github.com/dashpay/dash/commit/c1f756fd9) Multiple speed optimizations for deterministic MN list handling (#2972)
+- [`11699f540`](https://github.com/dashpay/dash/commit/11699f540) Process/keep messages/connections from PoSe-banned MNs (#2967)
+- [`c5415e746`](https://github.com/dashpay/dash/commit/c5415e746) Fix UI masternode list (#2966)
+- [`fb6f0e04d`](https://github.com/dashpay/dash/commit/fb6f0e04d) Bump version to 0.14.0.2 and copy release notes (#2991)
 
 Credits
 =======
 
 Thanks to everyone who directly contributed to this release:
 
-- accraze
-- Alex Morcos
-- BtcDrak
-- Jonas Schnelli
-- Luke Dashjr
-- MarcoFalke
-- Mark Friedenbach
-- NicolasDorier
-- Pieter Wuille
-- Suhas Daftuar
-- Wladimir J. van der Laan
+- Alexander Block (codablock)
+- UdjinM6
 
-As well as everyone that helped translating on [Transifex](https://www.transifex.com/projects/p/bitcoin/).
+As well as everyone that submitted issues and reviewed pull requests.
+
+Older releases
+==============
+
+Dash was previously known as Darkcoin.
+
+Darkcoin tree 0.8.x was a fork of Litecoin tree 0.8, original name was XCoin
+which was first released on Jan/18/2014.
 
 Darkcoin tree 0.9.x was the open source implementation of masternodes based on
 the 0.8.x tree and was first released on Mar/13/2014.
@@ -200,16 +101,33 @@ the 0.8.x tree and was first released on Mar/13/2014.
 Darkcoin tree 0.10.x used to be the closed source implementation of Darksend
 which was released open source on Sep/25/2014.
 
-Dash Core tree 0.11.x was a fork of Bitcoin Core tree 0.9, Darkcoin was rebranded
-to Dash.
+Dash Core tree 0.11.x was a fork of Bitcoin Core tree 0.9,
+Darkcoin was rebranded to Dash.
 
 Dash Core tree 0.12.0.x was a fork of Bitcoin Core tree 0.10.
 
-These release are considered obsolete. Old changelogs can be found here:
+Dash Core tree 0.12.1.x was a fork of Bitcoin Core tree 0.12.
 
-- [v0.12.0](release-notes/dash/release-notes-0.12.0.md) released ???/??/2015
-- [v0.11.2](release-notes/dash/release-notes-0.11.2.md) released Mar/25/2015
-- [v0.11.1](release-notes/dash/release-notes-0.11.1.md) released Feb/10/2015
-- [v0.11.0](release-notes/dash/release-notes-0.11.0.md) released Jan/15/2015
-- [v0.10.x](release-notes/dash/release-notes-0.10.0.md) released Sep/25/2014
-- [v0.9.x](release-notes/dash/release-notes-0.9.0.md) released Mar/13/2014
+These release are considered obsolete. Old release notes can be found here:
+
+- [v0.14.0.1](https://github.com/dashpay/dash/blob/master/doc/release-notes/dash/release-notes-0.14.0.1.md) released May/31/2019
+- [v0.14.0](https://github.com/dashpay/dash/blob/master/doc/release-notes/dash/release-notes-0.14.0.md) released May/22/2019
+- [v0.13.3](https://github.com/dashpay/dash/blob/master/doc/release-notes/dash/release-notes-0.13.3.md) released Apr/04/2019
+- [v0.13.2](https://github.com/dashpay/dash/blob/master/doc/release-notes/dash/release-notes-0.13.2.md) released Mar/15/2019
+- [v0.13.1](https://github.com/dashpay/dash/blob/master/doc/release-notes/dash/release-notes-0.13.1.md) released Feb/9/2019
+- [v0.13.0](https://github.com/dashpay/dash/blob/master/doc/release-notes/dash/release-notes-0.13.0.md) released Jan/14/2019
+- [v0.12.3.4](https://github.com/dashpay/dash/blob/master/doc/release-notes/dash/release-notes-0.12.3.4.md) released Dec/14/2018
+- [v0.12.3.3](https://github.com/dashpay/dash/blob/master/doc/release-notes/dash/release-notes-0.12.3.3.md) released Sep/19/2018
+- [v0.12.3.2](https://github.com/dashpay/dash/blob/master/doc/release-notes/dash/release-notes-0.12.3.2.md) released Jul/09/2018
+- [v0.12.3.1](https://github.com/dashpay/dash/blob/master/doc/release-notes/dash/release-notes-0.12.3.1.md) released Jul/03/2018
+- [v0.12.2.3](https://github.com/dashpay/dash/blob/master/doc/release-notes/dash/release-notes-0.12.2.3.md) released Jan/12/2018
+- [v0.12.2.2](https://github.com/dashpay/dash/blob/master/doc/release-notes/dash/release-notes-0.12.2.2.md) released Dec/17/2017
+- [v0.12.2](https://github.com/dashpay/dash/blob/master/doc/release-notes/dash/release-notes-0.12.2.md) released Nov/08/2017
+- [v0.12.1](https://github.com/dashpay/dash/blob/master/doc/release-notes/dash/release-notes-0.12.1.md) released Feb/06/2017
+- [v0.12.0](https://github.com/dashpay/dash/blob/master/doc/release-notes/dash/release-notes-0.12.0.md) released Aug/15/2015
+- [v0.11.2](https://github.com/dashpay/dash/blob/master/doc/release-notes/dash/release-notes-0.11.2.md) released Mar/04/2015
+- [v0.11.1](https://github.com/dashpay/dash/blob/master/doc/release-notes/dash/release-notes-0.11.1.md) released Feb/10/2015
+- [v0.11.0](https://github.com/dashpay/dash/blob/master/doc/release-notes/dash/release-notes-0.11.0.md) released Jan/15/2015
+- [v0.10.x](https://github.com/dashpay/dash/blob/master/doc/release-notes/dash/release-notes-0.10.0.md) released Sep/25/2014
+- [v0.9.x](https://github.com/dashpay/dash/blob/master/doc/release-notes/dash/release-notes-0.9.0.md) released Mar/13/2014
+

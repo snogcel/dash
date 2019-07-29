@@ -27,6 +27,12 @@ static const int MAX_OPS_PER_SCRIPT = 201;
 // Maximum number of public keys per multisig
 static const int MAX_PUBKEYS_PER_MULTISIG = 20;
 
+// Maximum script length in bytes
+static const int MAX_SCRIPT_SIZE = 10000;
+
+// Maximum number of values on script interpreter stack
+static const int MAX_STACK_SIZE = 1000;
+
 // Threshold for nLockTime: below this value it is interpreted as block number,
 // otherwise as UNIX timestamp.
 static const unsigned int LOCKTIME_THRESHOLD = 500000000; // Tue Nov  5 00:53:20 1985 UTC
@@ -164,8 +170,8 @@ enum opcodetype
     OP_NOP1 = 0xb0,
     OP_CHECKLOCKTIMEVERIFY = 0xb1,
     OP_NOP2 = OP_CHECKLOCKTIMEVERIFY,
-    OP_NOP3 = 0xb2,
-    OP_CHECKSEQUENCEVERIFY = OP_NOP3,
+    OP_CHECKSEQUENCEVERIFY = 0xb2,
+    OP_NOP3 = OP_CHECKSEQUENCEVERIFY,
     OP_NOP4 = 0xb3,
     OP_NOP5 = 0xb4,
     OP_NOP6 = 0xb5,
@@ -391,7 +397,6 @@ protected:
     }
 public:
     CScript() { }
-    CScript(const CScript& b) : CScriptBase(b.begin(), b.end()) { }
     CScript(const_iterator pbegin, const_iterator pend) : CScriptBase(pbegin, pend) { }
     CScript(std::vector<unsigned char>::const_iterator pbegin, std::vector<unsigned char>::const_iterator pend) : CScriptBase(pbegin, pend) { }
     CScript(const unsigned char* pbegin, const unsigned char* pend) : CScriptBase(pbegin, pend) { }
@@ -446,16 +451,16 @@ public:
         else if (b.size() <= 0xffff)
         {
             insert(end(), OP_PUSHDATA2);
-            uint8_t data[2];
-            WriteLE16(data, b.size());
-            insert(end(), data, data + sizeof(data));
+            uint8_t _data[2];
+            WriteLE16(_data, b.size());
+            insert(end(), _data, _data + sizeof(_data));
         }
         else
         {
             insert(end(), OP_PUSHDATA4);
-            uint8_t data[4];
-            WriteLE32(data, b.size());
-            insert(end(), data, data + sizeof(data));
+            uint8_t _data[4];
+            WriteLE32(_data, b.size());
+            insert(end(), _data, _data + sizeof(_data));
         }
         insert(end(), b.begin(), b.end());
         return *this;
@@ -570,17 +575,26 @@ public:
         int nFound = 0;
         if (b.empty())
             return nFound;
-        iterator pc = begin();
+        CScript result;
+        iterator pc = begin(), pc2 = begin();
         opcodetype opcode;
         do
         {
-            while (end() - pc >= (long)b.size() && memcmp(&pc[0], &b[0], b.size()) == 0)
+            result.insert(result.end(), pc2, pc);
+            while (static_cast<size_t>(end() - pc) >= b.size() && std::equal(b.begin(), b.end(), pc))
             {
-                pc = erase(pc, pc + b.size());
+                pc = pc + b.size();
                 ++nFound;
             }
+            pc2 = pc;
         }
         while (GetOp(pc, opcode));
+
+        if (nFound > 0) {
+            result.insert(result.end(), pc2, end());
+            *this = result;
+        }
+
         return nFound;
     }
     int Find(opcodetype op) const
@@ -608,8 +622,12 @@ public:
      */
     unsigned int GetSigOpCount(const CScript& scriptSig) const;
 
-    bool IsNormalPaymentScript() const;
+    bool IsPayToPublicKeyHash() const;
+
     bool IsPayToScriptHash() const;
+
+    /** Used for obsolete pay-to-pubkey addresses indexing. */
+    bool IsPayToPublicKey() const;
 
     /** Called by IsStandardTx and P2SH/BIP62 VerifyScript (which makes it consensus-critical). */
     bool IsPushOnly(const_iterator pc) const;
@@ -622,13 +640,23 @@ public:
      */
     bool IsUnspendable() const
     {
-        return (size() > 0 && *begin() == OP_RETURN);
+        return (size() > 0 && *begin() == OP_RETURN) || (size() > MAX_SCRIPT_SIZE);
     }
 
     void clear()
     {
-        // The default std::vector::clear() does not release memory.
-        CScriptBase().swap(*this);
+        // The default prevector::clear() does not release memory
+        CScriptBase::clear();
+        shrink_to_fit();
+    }
+
+    template<typename Stream>
+    void Serialize(Stream& s) const {
+        s << *(CScriptBase*)this;
+    }
+    template<typename Stream>
+    void Unserialize(Stream& s) {
+        s >> *(CScriptBase*)this;
     }
 };
 

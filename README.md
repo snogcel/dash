@@ -1,7 +1,7 @@
-Dash Core staging tree 0.12.1
+Dash Core staging tree 0.14.1
 ===============================
 
-`master:` [![Build Status](https://travis-ci.org/dashpay/dash.svg?branch=master)](https://travis-ci.org/dashpay/dash) `v0.12.0.x:` [![Build Status](https://travis-ci.org/dashpay/dash.svg?branch=v0.12.0.x)](https://travis-ci.org/dashpay/dash/branches) `v0.12.1.x:` [![Build Status](https://travis-ci.org/dashpay/dash.svg?branch=v0.12.1.x)](https://travis-ci.org/dashpay/dash/branches)
+`master:` [![Build Status](https://travis-ci.org/dashpay/dash.svg?branch=master)](https://travis-ci.org/dashpay/dash) `develop:` [![Build Status](https://travis-ci.org/dashpay/dash.svg?branch=develop)](https://travis-ci.org/dashpay/dash/branches)
 
 https://www.dash.org
 
@@ -9,14 +9,14 @@ https://www.dash.org
 What is Dash?
 ----------------
 
-Dash is an experimental new digital currency that enables anonymous, instant
+Dash is an experimental digital currency that enables anonymous, instant
 payments to anyone, anywhere in the world. Dash uses peer-to-peer technology
 to operate with no central authority: managing transactions and issuing money
 are carried out collectively by the network. Dash Core is the name of the open
 source software which enables the use of this currency.
 
 For more information, as well as an immediately useable, binary version of
-the Dash Core software, see https://www.dash.org/downloads.
+the Dash Core software, see https://www.dash.org/get-dash/.
 
 
 License
@@ -44,16 +44,16 @@ lots of money.
 
 ### Automated Testing
 
-Developers are strongly encouraged to write [unit tests](/doc/unit-tests.md) for new code, and to
+Developers are strongly encouraged to write [unit tests](src/test/README.md) for new code, and to
 submit new unit tests for old code. Unit tests can be compiled and run
-(assuming they weren't disabled in configure) with: `make check`
+(assuming they weren't disabled in configure) with: `make check`. Further details on running
+and extending unit tests can be found in [/src/test/README.md](/src/test/README.md).
 
-There are also [regression and integration tests](/qa) of the RPC interface, written
+There are also [regression and integration tests](/test), written
 in Python, that are run automatically on the build server.
-These tests can be run with: `qa/pull-tester/rpc-tests.py`
+These tests can be run (if the [test dependencies](/test) are installed) with: `test/functional/test_runner.py`
 
-The Travis CI system makes sure that every pull request is built for Windows
-and Linux, OSX, and that unit and sanity tests are automatically run.
+The Travis CI system makes sure that every pull request is built for Windows, Linux, and OS X, and that unit/sanity tests are run automatically.
 
 ### Manual Quality Assurance (QA) Testing
 

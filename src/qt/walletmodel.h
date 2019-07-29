@@ -8,8 +8,9 @@
 #include "paymentrequestplus.h"
 #include "walletmodeltransaction.h"
 
-#include "instantx.h"
+#ifdef ENABLE_WALLET
 #include "wallet/wallet.h"
+#endif // ENABLE_WALLET
 #include "support/allocators/secure.h"
 
 #include <map>
@@ -40,8 +41,8 @@ class SendCoinsRecipient
 {
 public:
     explicit SendCoinsRecipient() : amount(0), fSubtractFeeFromAmount(false), nVersion(SendCoinsRecipient::CURRENT_VERSION) { }
-    explicit SendCoinsRecipient(const QString &addr, const QString &label, const CAmount& amount, const QString &message):
-        address(addr), label(label), amount(amount), message(message), fSubtractFeeFromAmount(false), nVersion(SendCoinsRecipient::CURRENT_VERSION) {}
+    explicit SendCoinsRecipient(const QString &addr, const QString &_label, const CAmount& _amount, const QString &_message):
+        address(addr), label(_label), amount(_amount), message(_message), fSubtractFeeFromAmount(false), nVersion(SendCoinsRecipient::CURRENT_VERSION) {}
 
     // If from an unauthenticated payment request, this is used for storing
     // the addresses, e.g. address-A<br />address-B<br />address-C.
@@ -50,8 +51,9 @@ public:
     // Todo: This is a hack, should be replaced with a cleaner solution!
     QString address;
     QString label;
+#ifdef ENABLE_WALLET
     AvailableCoinsType inputType;
-    bool useInstantX;
+#endif // ENABLE_WALLET
     CAmount amount;
     // If from a payment request, this is used for storing the memo
     QString message;
@@ -69,7 +71,7 @@ public:
     ADD_SERIALIZE_METHODS;
 
     template <typename Stream, typename Operation>
-    inline void SerializationOp(Stream& s, Operation ser_action, int nType, int nVersion) {
+    inline void SerializationOp(Stream& s, Operation ser_action) {
         std::string sAddress = address.toStdString();
         std::string sLabel = label.toStdString();
         std::string sMessage = message.toStdString();
@@ -79,7 +81,6 @@ public:
         std::string sAuthenticatedMerchant = authenticatedMerchant.toStdString();
 
         READWRITE(this->nVersion);
-        nVersion = this->nVersion;
         READWRITE(sAddress);
         READWRITE(sLabel);
         READWRITE(amount);
@@ -118,17 +119,16 @@ public:
         DuplicateAddress,
         TransactionCreationFailed, // Error returned when wallet is still locked
         TransactionCommitFailed,
-        AnonymizeOnlyUnlocked,
         AbsurdFee,
         PaymentRequestExpired
     };
 
     enum EncryptionStatus
     {
-        Unencrypted,  // !wallet->IsCrypted()
-        Locked,       // wallet->IsCrypted() && wallet->IsLocked()
-        Unlocked,      // wallet->IsCrypted() && !wallet->IsLocked()
-        UnlockedForAnonymizationOnly     // wallet->IsCrypted() && !wallet->IsLocked() && wallet->fWalletUnlockAnonymizeOnly
+        Unencrypted,            // !wallet->IsCrypted()
+        Locked,                 // wallet->IsCrypted() && wallet->IsLocked(true)
+        UnlockedForMixingOnly,  // wallet->IsCrypted() && !wallet->IsLocked(true) && wallet->IsLocked()
+        Unlocked,               // wallet->IsCrypted() && !wallet->IsLocked()
     };
 
     OptionsModel *getOptionsModel();
@@ -152,9 +152,13 @@ public:
     // Return status record for SendCoins, contains error id + information
     struct SendCoinsReturn
     {
-        SendCoinsReturn(StatusCode status = OK):
-            status(status) {}
+        SendCoinsReturn(StatusCode _status = OK, QString _reasonCommitFailed = "")
+            : status(_status),
+              reasonCommitFailed(_reasonCommitFailed)
+        {
+        }
         StatusCode status;
+        QString reasonCommitFailed;
     };
 
     // prepare transaction for getting txfee before sending coins
@@ -166,10 +170,9 @@ public:
     // Wallet encryption
     bool setWalletEncrypted(bool encrypted, const SecureString &passphrase);
     // Passphrase only needed when unlocking
-    bool setWalletLocked(bool locked, const SecureString &passPhrase=SecureString(), bool anonymizeOnly=false);
+    bool setWalletLocked(bool locked, const SecureString &passPhrase=SecureString(), bool fMixing=false);
     bool changePassphrase(const SecureString &oldPass, const SecureString &newPass);
-    // Is wallet unlocked for anonymization only?
-    bool isAnonymizeOnlyUnlocked();
+
     // Wallet backup
     bool backupWallet(const QString &filename);
 
@@ -177,7 +180,7 @@ public:
     class UnlockContext
     {
     public:
-        UnlockContext(WalletModel *wallet, bool valid, bool relock);
+        UnlockContext(WalletModel *wallet, bool valid, bool was_locked, bool was_mixing);
         ~UnlockContext();
 
         bool isValid() const { return valid; }
@@ -188,15 +191,18 @@ public:
     private:
         WalletModel *wallet;
         bool valid;
-        mutable bool relock; // mutable, as it can be set to false by copying
+        mutable bool was_locked; // mutable, as it can be set to false by copying
+        mutable bool was_mixing; // mutable, as it can be set to false by copying
 
         void CopyFrom(const UnlockContext& rhs);
     };
 
-    UnlockContext requestUnlock(bool relock);
+    UnlockContext requestUnlock(bool fForMixingOnly=false);
 
     bool getPubKey(const CKeyID &address, CPubKey& vchPubKeyOut) const;
     bool havePrivKey(const CKeyID &address) const;
+    bool havePrivKey(const CScript& script) const;
+    bool getPrivKey(const CKeyID &address, CKey& vchPrivKeyOut) const;
     void getOutputs(const std::vector<COutPoint>& vOutpoints, std::vector<COutput>& vOutputs);
     bool isSpent(const COutPoint& outpoint) const;
     void listCoins(std::map<QString, std::vector<COutput> >& mapCoins) const;
@@ -206,8 +212,20 @@ public:
     void unlockCoin(COutPoint& output);
     void listLockedCoins(std::vector<COutPoint>& vOutpts);
 
+    void listProTxCoins(std::vector<COutPoint>& vOutpts);
+
     void loadReceiveRequests(std::vector<std::string>& vReceiveRequests);
     bool saveReceiveRequest(const std::string &sAddress, const int64_t nId, const std::string &sRequest);
+
+    bool transactionCanBeAbandoned(uint256 hash) const;
+    bool abandonTransaction(uint256 hash) const;
+
+    static bool isWalletEnabled();
+
+    bool hdEnabled() const;
+
+    int getDefaultConfirmTarget() const;
+    int getNumISLocks() const;
 
 private:
     CWallet *wallet;
@@ -232,7 +250,7 @@ private:
     CAmount cachedWatchImmatureBalance;
     EncryptionStatus cachedEncryptionStatus;
     int cachedNumBlocks;
-    int cachedTxLocks;
+    int cachedNumISLocks;
     int cachedPrivateSendRounds;
 
     QTimer *pollTimer;
@@ -252,7 +270,7 @@ Q_SIGNALS:
     // Signal emitted when wallet needs to be unlocked
     // It is valid behaviour for listeners to keep the wallet locked after this signal;
     // this means that the unlocking failed or was cancelled.
-    void requireUnlock();
+    void requireUnlock(bool fForMixingOnly=false);
 
     // Fired when a message should be reported to the user
     void message(const QString &title, const QString &message, unsigned int style);
@@ -271,6 +289,10 @@ public Q_SLOTS:
     void updateStatus();
     /* New transaction, or transaction changed status */
     void updateTransaction();
+    /* IS-Lock received */
+    void updateNumISLocks();
+    /* ChainLock received */
+    void updateChainLockHeight(int chainLockHeight);
     /* New, updated or removed address book entry */
     void updateAddressBook(const QString &address, const QString &label, bool isMine, const QString &purpose, int status);
     /* Watch-only added */

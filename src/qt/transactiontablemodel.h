@@ -30,10 +30,11 @@ public:
     enum ColumnIndex {
         Status = 0,
         Watchonly = 1,
-        Date = 2,
-        Type = 3,
-        ToAddress = 4,
-        Amount = 5
+        InstantSend = 2,
+        Date = 3,
+        Type = 4,
+        ToAddress = 5,
+        Amount = 6
     };
 
     /** Roles to get specific information from a transaction row.
@@ -48,6 +49,10 @@ public:
         WatchonlyRole,
         /** Watch-only icon */
         WatchonlyDecorationRole,
+        /** InstantSend boolean */
+        InstantSendRole,
+        /** InstantSend icon */
+        InstantSendDecorationRole,
         /** Long description (HTML format) */
         LongDescriptionRole,
         /** Address of transaction */
@@ -62,6 +67,8 @@ public:
         TxHashRole,
         /** Transaction data, hex-encoded */
         TxHexRole,
+        /** Whole transaction as plain text */
+        TxPlainTextRole,
         /** Is transaction confirmed? */
         ConfirmedRole,
         /** Formatted amount, without brackets when unconfirmed */
@@ -78,6 +85,10 @@ public:
     QVariant headerData(int section, Qt::Orientation orientation, int role) const;
     QModelIndex index(int row, int column, const QModelIndex & parent = QModelIndex()) const;
     bool processingQueuedTransactions() { return fProcessingQueuedTransactions; }
+    void updateNumISLocks(int numISLocks);
+    void updateChainLockHeight(int chainLockHeight);
+    int getNumISLocks() const;
+    int getChainLockHeight() const;
 
 private:
     CWallet* wallet;
@@ -86,6 +97,8 @@ private:
     TransactionTablePriv *priv;
     bool fProcessingQueuedTransactions;
     const PlatformStyle *platformStyle;
+    int cachedNumISLocks;
+    int cachedChainLockHeight;
 
     void subscribeToCoreSignals();
     void unsubscribeFromCoreSignals();
@@ -100,6 +113,7 @@ private:
     QString formatTooltip(const TransactionRecord *rec) const;
     QVariant txStatusDecoration(const TransactionRecord *wtx) const;
     QVariant txWatchonlyDecoration(const TransactionRecord *wtx) const;
+    QVariant txInstantSendDecoration(const TransactionRecord *wtx) const;
     QVariant txAddressDecoration(const TransactionRecord *wtx) const;
 
 public Q_SLOTS:

@@ -12,17 +12,16 @@
 #include "bitcoinunits.h"
 #include "guiutil.h"
 #include "optionsmodel.h"
-#include "darksend.h"
 
-#include "main.h" // for DEFAULT_SCRIPTCHECK_THREADS and MAX_SCRIPTCHECK_THREADS
+#include "validation.h" // for DEFAULT_SCRIPTCHECK_THREADS and MAX_SCRIPTCHECK_THREADS
 #include "netbase.h"
 #include "txdb.h" // for -dbcache defaults
 
 #ifdef ENABLE_WALLET
 #include "wallet/wallet.h" // for CWallet::GetRequiredFee()
-#endif
 
-#include <boost/thread.hpp>
+#include "privatesend/privatesend-client.h"
+#endif // ENABLE_WALLET
 
 #include <QDataWidgetMapper>
 #include <QDir>
@@ -30,6 +29,11 @@
 #include <QLocale>
 #include <QMessageBox>
 #include <QTimer>
+
+#ifdef ENABLE_WALLET
+typedef CWallet* CWalletRef;
+extern std::vector<CWalletRef> vpwallets;
+#endif //ENABLE_WALLET
 
 OptionsDialog::OptionsDialog(QWidget *parent, bool enableWallet) :
     QDialog(parent),
@@ -87,15 +91,18 @@ OptionsDialog::OptionsDialog(QWidget *parent, bool enableWallet) :
     }
     
     /* Theme selector */
-    ui->theme->addItem(QString("DASH-light"), QVariant("light"));
-    ui->theme->addItem(QString("DASH-blue"), QVariant("drkblue"));
-    ui->theme->addItem(QString("DASH-Crownium"), QVariant("crownium"));
-    ui->theme->addItem(QString("DASH-traditional"), QVariant("trad"));
-    
+    ui->theme->addItem(QString("Light"), QVariant("light"));
+    ui->theme->addItem(QString("Light-HiRes"), QVariant("light-hires"));
+
     /* Language selector */
     QDir translations(":translations");
+
+    ui->bitcoinAtStartup->setToolTip(ui->bitcoinAtStartup->toolTip().arg(tr(PACKAGE_NAME)));
+    ui->bitcoinAtStartup->setText(ui->bitcoinAtStartup->text().arg(tr(PACKAGE_NAME)));
+
+    ui->lang->setToolTip(ui->lang->toolTip().arg(tr(PACKAGE_NAME)));
     ui->lang->addItem(QString("(") + tr("default") + QString(")"), QVariant(""));
-    Q_FOREACH(const QString &langStr, translations.entryList())
+    for (const QString &langStr : translations.entryList())
     {
         QLocale locale(langStr);
 
@@ -146,22 +153,22 @@ OptionsDialog::~OptionsDialog()
     delete ui;
 }
 
-void OptionsDialog::setModel(OptionsModel *model)
+void OptionsDialog::setModel(OptionsModel *_model)
 {
-    this->model = model;
+    this->model = _model;
 
-    if(model)
+    if(_model)
     {
         /* check if client restart is needed and show persistent message */
-        if (model->isRestartRequired())
+        if (_model->isRestartRequired())
             showRestartWarning(true);
 
-        QString strLabel = model->getOverriddenByCommandLine();
+        QString strLabel = _model->getOverriddenByCommandLine();
         if (strLabel.isEmpty())
             strLabel = tr("none");
         ui->overriddenByCommandLineLabel->setText(strLabel);
 
-        mapper->setModel(model);
+        mapper->setModel(_model);
         setMapper();
         mapper->toFirst();
 
@@ -174,6 +181,7 @@ void OptionsDialog::setModel(OptionsModel *model)
     connect(ui->databaseCache, SIGNAL(valueChanged(int)), this, SLOT(showRestartWarning()));
     connect(ui->threadsScriptVerif, SIGNAL(valueChanged(int)), this, SLOT(showRestartWarning()));
     /* Wallet */
+    connect(ui->showMasternodesTab, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
     connect(ui->spendZeroConfChange, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
     /* Network */
     connect(ui->allowIncoming, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
@@ -184,7 +192,6 @@ void OptionsDialog::setModel(OptionsModel *model)
     connect(ui->theme, SIGNAL(valueChanged()), this, SLOT(showRestartWarning()));
     connect(ui->lang, SIGNAL(valueChanged()), this, SLOT(showRestartWarning()));
     connect(ui->thirdPartyTxUrls, SIGNAL(textChanged(const QString &)), this, SLOT(showRestartWarning()));
-    connect(ui->showMasternodesTab, SIGNAL(clicked(bool)), this, SLOT(showRestartWarning()));
 }
 
 void OptionsDialog::setMapper()
@@ -195,13 +202,15 @@ void OptionsDialog::setMapper()
     mapper->addMapping(ui->databaseCache, OptionsModel::DatabaseCache);
 
     /* Wallet */
-    mapper->addMapping(ui->spendZeroConfChange, OptionsModel::SpendZeroConfChange);
+    mapper->addMapping(ui->coinControlFeatures, OptionsModel::CoinControlFeatures);
     mapper->addMapping(ui->showMasternodesTab, OptionsModel::ShowMasternodesTab);
     mapper->addMapping(ui->showAdvancedPSUI, OptionsModel::ShowAdvancedPSUI);
-    mapper->addMapping(ui->coinControlFeatures, OptionsModel::CoinControlFeatures);
-    mapper->addMapping(ui->privateSendRounds, OptionsModel::PrivateSendRounds);
-    mapper->addMapping(ui->anonymizeDash, OptionsModel::AnonymizeDashAmount);
+    mapper->addMapping(ui->showPrivateSendPopups, OptionsModel::ShowPrivateSendPopups);
+    mapper->addMapping(ui->lowKeysWarning, OptionsModel::LowKeysWarning);
     mapper->addMapping(ui->privateSendMultiSession, OptionsModel::PrivateSendMultiSession);
+    mapper->addMapping(ui->spendZeroConfChange, OptionsModel::SpendZeroConfChange);
+    mapper->addMapping(ui->privateSendRounds, OptionsModel::PrivateSendRounds);
+    mapper->addMapping(ui->privateSendAmount, OptionsModel::PrivateSendAmount);
 
     /* Network */
     mapper->addMapping(ui->mapPortUpnp, OptionsModel::MapPortUPnP);
@@ -217,6 +226,7 @@ void OptionsDialog::setMapper()
 
     /* Window */
 #ifndef Q_OS_MAC
+    mapper->addMapping(ui->hideTrayIcon, OptionsModel::HideTrayIcon);
     mapper->addMapping(ui->minimizeToTray, OptionsModel::MinimizeToTray);
     mapper->addMapping(ui->minimizeOnClose, OptionsModel::MinimizeOnClose);
 #endif
@@ -256,8 +266,11 @@ void OptionsDialog::on_resetButton_clicked()
 void OptionsDialog::on_okButton_clicked()
 {
     mapper->submit();
-    darkSendPool.cachedNumBlocks = std::numeric_limits<int>::max();
-    pwalletMain->MarkDirty();
+#ifdef ENABLE_WALLET
+    privateSendClient.nCachedNumBlocks = std::numeric_limits<int>::max();
+    if(!vpwallets.empty())
+        vpwallets[0]->MarkDirty();
+#endif // ENABLE_WALLET
     accept();
     updateDefaultProxyNets();
 }
@@ -265,6 +278,19 @@ void OptionsDialog::on_okButton_clicked()
 void OptionsDialog::on_cancelButton_clicked()
 {
     reject();
+}
+
+void OptionsDialog::on_hideTrayIcon_stateChanged(int fState)
+{
+    if(fState)
+    {
+        ui->minimizeToTray->setChecked(false);
+        ui->minimizeToTray->setEnabled(false);
+    }
+    else
+    {
+        ui->minimizeToTray->setEnabled(true);
+    }
 }
 
 void OptionsDialog::showRestartWarning(bool fPersistent)
@@ -287,6 +313,9 @@ void OptionsDialog::showRestartWarning(bool fPersistent)
 void OptionsDialog::clearStatusLabel()
 {
     ui->statusLabel->clear();
+    if (model && model->isRestartRequired()) {
+        showRestartWarning(true);
+    }
 }
 
 void OptionsDialog::updateProxyValidationState()
@@ -296,7 +325,7 @@ void OptionsDialog::updateProxyValidationState()
     if (pUiProxyIp->isValid() && (!ui->proxyPort->isEnabled() || ui->proxyPort->text().toInt() > 0) && (!ui->proxyPortTor->isEnabled() || ui->proxyPortTor->text().toInt() > 0))
     {
         setOkButtonState(otherProxyWidget->isValid()); //only enable ok button if both proxys are valid
-        ui->statusLabel->clear();
+        clearStatusLabel();
     }
     else
     {
@@ -337,7 +366,8 @@ QValidator::State ProxyAddressValidator::validate(QString &input, int &pos) cons
 {
     Q_UNUSED(pos);
     // Validate the proxy
-    proxyType addrProxy = proxyType(CService(input.toStdString(), 9050), true);
+    CService serv(LookupNumeric(input.toStdString().c_str(), 9050));
+    proxyType addrProxy = proxyType(serv, true);
     if (addrProxy.IsValid())
         return QValidator::Acceptable;
 

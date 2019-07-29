@@ -1,5 +1,5 @@
 // Copyright (c) 2009-2010 Satoshi Nakamoto
-// Copyright (c) 2009-2015 The Bitcoin developers
+// Copyright (c) 2009-2016 The Bitcoin Core developers
 // Distributed under the MIT software license, see the accompanying
 // file COPYING or http://www.opensource.org/licenses/mit-license.php.
 
@@ -7,12 +7,34 @@
 
 #include "policy/policy.h"
 
-#include "main.h"
+#include "validation.h"
+#include "coins.h"
 #include "tinyformat.h"
 #include "util.h"
 #include "utilstrencodings.h"
 
 #include <boost/foreach.hpp>
+
+CAmount GetDustThreshold(const CTxOut& txout, const CFeeRate& dustRelayFeeIn)
+{
+    // "Dust" is defined in terms of CTransaction::minRelayTxFee, which has units duffs-per-kilobyte.
+    // If you'd pay more than 1/3 in fees to spend something, then we consider it dust.
+    // A typical spendable txout is 34 bytes big, and will need a CTxIn of at least 148 bytes to spend
+    // i.e. total is 148 + 34 = 182 bytes. Default -minrelaytxfee is 1000 duffs per kB
+    // and that means that fee per spendable txout is 182 * 1000 / 1000 = 182 duffs.
+    // So dust is a spendable txout less than 546 * minRelayTxFee / 1000 (in duffs)
+    // i.e. 182 * 3 = 546 duffs with default -minrelaytxfee = minRelayTxFee = 1000 duffs per kB.
+    if (txout.scriptPubKey.IsUnspendable())
+        return 0;
+
+    size_t nSize = GetSerializeSize(txout, SER_DISK, 0)+148u;
+    return 3 * dustRelayFeeIn.GetFee(nSize);
+}
+
+bool IsDust(const CTxOut& txout, const CFeeRate& dustRelayFeeIn)
+{
+    return (txout.nValue < GetDustThreshold(txout, dustRelayFeeIn));
+}
 
     /**
      * Check transaction inputs to mitigate two
@@ -23,9 +45,6 @@
      * 2. P2SH scripts with a crazy number of expensive
      *    CHECKSIG/CHECKMULTISIG operations
      *
-     * Check transaction inputs, and make sure any
-     * pay-to-script-hash transactions are evaluating IsStandard scripts
-     * 
      * Why bother? To avoid denial-of-service attacks; an attacker
      * can submit a standard HASH... OP_EQUAL transaction,
      * which will get accepted into blocks. The redemption
@@ -67,21 +86,21 @@ bool IsStandardTx(const CTransaction& tx, std::string& reason)
     // almost as much to process as they cost the sender in fees, because
     // computing signature hashes is O(ninputs*txsize). Limiting transactions
     // to MAX_STANDARD_TX_SIZE mitigates CPU exhaustion attacks.
-    unsigned int sz = tx.GetSerializeSize(SER_NETWORK, CTransaction::CURRENT_VERSION);
+    unsigned int sz = GetSerializeSize(tx, SER_NETWORK, CTransaction::CURRENT_VERSION);
     if (sz >= MAX_STANDARD_TX_SIZE) {
         reason = "tx-size";
         return false;
     }
 
-    BOOST_FOREACH(const CTxIn& txin, tx.vin)
+    for (const CTxIn& txin : tx.vin)
     {
         // Biggest 'standard' txin is a 15-of-15 P2SH multisig with compressed
-        // keys. (remember the 520 byte limit on redeemScript size) That works
+        // keys (remember the 520 byte limit on redeemScript size). That works
         // out to a (15*(33+1))+3=513 byte redeemScript, 513+1+15*(73+1)+3=1627
         // bytes of scriptSig, which we round off to 1650 bytes for some minor
         // future-proofing. That's also enough to spend a 20-of-20
         // CHECKMULTISIG scriptPubKey, though such a scriptPubKey is not
-        // considered standard)
+        // considered standard.
         if (txin.scriptSig.size() > 1650) {
             reason = "scriptsig-size";
             return false;
@@ -94,7 +113,7 @@ bool IsStandardTx(const CTransaction& tx, std::string& reason)
 
     unsigned int nDataOut = 0;
     txnouttype whichType;
-    BOOST_FOREACH(const CTxOut& txout, tx.vout) {
+    for (const CTxOut& txout : tx.vout) {
         if (!::IsStandard(txout.scriptPubKey, whichType)) {
             reason = "scriptpubkey";
             return false;
@@ -105,7 +124,7 @@ bool IsStandardTx(const CTransaction& tx, std::string& reason)
         else if ((whichType == TX_MULTISIG) && (!fIsBareMultisigStd)) {
             reason = "bare-multisig";
             return false;
-        } else if (txout.IsDust(::minRelayTxFee)) {
+        } else if (IsDust(txout, ::dustRelayFee)) {
             reason = "dust";
             return false;
         }
@@ -127,7 +146,7 @@ bool AreInputsStandard(const CTransaction& tx, const CCoinsViewCache& mapInputs)
 
     for (unsigned int i = 0; i < tx.vin.size(); i++)
     {
-        const CTxOut& prev = mapInputs.GetOutputFor(tx.vin[i]);
+        const CTxOut& prev = mapInputs.AccessCoin(tx.vin[i].prevout).out;
 
         std::vector<std::vector<unsigned char> > vSolutions;
         txnouttype whichType;
@@ -153,3 +172,6 @@ bool AreInputsStandard(const CTransaction& tx, const CCoinsViewCache& mapInputs)
 
     return true;
 }
+
+CFeeRate incrementalRelayFee = CFeeRate(DEFAULT_INCREMENTAL_RELAY_FEE);
+CFeeRate dustRelayFee = CFeeRate(DUST_RELAY_TX_FEE);

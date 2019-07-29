@@ -8,12 +8,13 @@
 #include "walletmodel.h"
 
 #include <QDialog>
+#include <QMessageBox>
 #include <QString>
+#include <QTimer>
 
 static const int MAX_SEND_POPUP_ENTRIES = 10;
 
 class ClientModel;
-class OptionsModel;
 class PlatformStyle;
 class SendCoinsEntry;
 class SendCoinsRecipient;
@@ -25,8 +26,6 @@ namespace Ui {
 QT_BEGIN_NAMESPACE
 class QUrl;
 QT_END_NAMESPACE
-
-const int defaultConfirmTarget = 25;
 
 /** Dialog for sending bitcoins */
 class SendCoinsDialog : public QDialog
@@ -79,7 +78,6 @@ private Q_SLOTS:
     void on_buttonMinimizeFee_clicked();
     void removeEntry(SendCoinsEntry* entry);
     void updateDisplayUnit();
-    void updateInstantX();
     void coinControlFeatureChanged(bool);
     void coinControlButtonClicked();
     void coinControlChangeChecked(int);
@@ -90,7 +88,6 @@ private Q_SLOTS:
     void coinControlClipboardFee();
     void coinControlClipboardAfterFee();
     void coinControlClipboardBytes();
-    void coinControlClipboardPriority();
     void coinControlClipboardLowOutput();
     void coinControlClipboardChange();
     void setMinimumFee();
@@ -102,6 +99,26 @@ private Q_SLOTS:
 Q_SIGNALS:
     // Fired when a message should be reported to the user
     void message(const QString &title, const QString &message, unsigned int style);
+};
+
+
+
+class SendConfirmationDialog : public QMessageBox
+{
+    Q_OBJECT
+
+public:
+    SendConfirmationDialog(const QString &title, const QString &text, int secDelay = 0, QWidget *parent = 0);
+    int exec();
+
+private Q_SLOTS:
+    void countDown();
+    void updateYesButton();
+
+private:
+    QAbstractButton *yesButton;
+    QTimer countDownTimer;
+    int secDelay;
 };
 
 #endif // BITCOIN_QT_SENDCOINSDIALOG_H
