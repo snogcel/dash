@@ -231,7 +231,6 @@ RES_ICONS = \
   qt/res/icons/tx_input.png \
   qt/res/icons/tx_output.png \
   qt/res/icons/tx_mined.png \
-  qt/res/icons/about.png \
   qt/res/icons/about_qt.png \
   qt/res/icons/verify.png \
   qt/res/icons/fontbigger.png \
@@ -305,7 +304,6 @@ BITCOIN_QT_CPP += $(BITCOIN_QT_WALLET_CPP)
 endif
 
 RES_IMAGES = \
-  qt/res/images/about.png \
   qt/res/images/arrow_down.png \
   qt/res/images/arrow_down_small.png \
   qt/res/images/arrow_left_small.png \
